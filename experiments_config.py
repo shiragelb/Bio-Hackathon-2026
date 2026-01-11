@@ -63,3 +63,17 @@ EXPERIMENTS_CONFIG = [
         }
     }
 ]
+
+
+EXPERIMENTS_CONFIG_TEMP = [
+    {
+        "train": {
+            "ecoli_temp":
+              ["Escherichia_coli_K12-MG1655", "Escherichia_coli_E. coli B REL606", "Escherichia_coli_HS","Escherichia_coli_SE11"]
+        },
+        "test": {
+            "ecoli_temp_test":
+                ["Escherichia_coli_042"],          
+        }
+    }
+]
