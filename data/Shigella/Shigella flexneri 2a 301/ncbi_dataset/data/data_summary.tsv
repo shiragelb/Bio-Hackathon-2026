@@ -1,0 +1,3 @@
+Organism Scientific Name	Organism Common Name	Organism Qualifier	Taxonomy id	Assembly Name	Assembly Accession	Source	Annotation	Level	Contig N50	Size	Submission Date	Gene Count	BioProject	BioSample
+Shigella flexneri 2a str. 301		strain: 301	198214	ASM692v2	GCA_000006925.2	GenBank	Annotation submitted by Microbial Genome Center of ChMPH	Complete Genome	4607202	4828820	2011-08-03	4835	PRJNA310	SAMN02603599
+Shigella flexneri 2a str. 301		strain: 301	198214	ASM692v2	GCF_000006925.2	RefSeq	Annotation submitted by NCBI RefSeq	Complete Genome	4607202	4828820	2011-08-03	4788	PRJNA310	SAMN02603599
