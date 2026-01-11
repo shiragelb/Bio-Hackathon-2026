@@ -2,7 +2,7 @@ import math
 from collections import defaultdict
 
 STATES = ("C", "N")
-ALPHABET = ("A", "C", "G", "T")
+ALPHABET = ("A", "C", "G", "T","N")
 
 def read_fasta(path: str) -> str:
     seq_parts = []
@@ -14,10 +14,17 @@ def read_fasta(path: str) -> str:
             seq_parts.append(line.upper())
     seq = "".join(seq_parts)
 
-    bad = {ch for ch in seq if ch not in set(ALPHABET)}
-    if bad:
-        raise ValueError(f"FASTA contains non-ACGT characters: {sorted(bad)}")
-    return seq
+    # תיקון: במקום לזרוק שגיאה על אותיות לא מוכרות, נמיר אותן ל-N
+    # W, R, Y, M, K, S, etc. -> N
+    valid_chars = set("ACGT")
+    cleaned_seq = []
+    for ch in seq:
+        if ch in valid_chars:
+            cleaned_seq.append(ch)
+        else:
+            cleaned_seq.append("N")
+            
+    return "".join(cleaned_seq)
 
 def read_labels(path: str) -> str:
     parts = []
@@ -45,6 +52,7 @@ def train_supervised_hmm(seq: str, labels: str, laplace: float = 1.0):
     trans_counts = {s: defaultdict(int) for s in STATES}
     init_counts = defaultdict(int)
 
+    # ספירת מעברים ופליטות
     init_counts[labels[0]] += 1
     for t, (x, y) in enumerate(zip(seq, labels)):
         emit_counts[y][x] += 1
@@ -54,16 +62,21 @@ def train_supervised_hmm(seq: str, labels: str, laplace: float = 1.0):
     emissions = {s: {} for s in STATES}
     transitions = {s: {} for s in STATES}
 
+    # חישוב הסתברויות עם החלקה (Laplace Smoothing)
     for s in STATES:
+        # סך הכל תווים שנפלטו ממצב s + החלקה לכל תו באלפבית (כולל N)
         total = sum(emit_counts[s][a] for a in ALPHABET) + laplace * len(ALPHABET)
         for a in ALPHABET:
-            emissions[s][a] = (emit_counts[s][a] + laplace) / total
+            # אם התו a לא הופיע מעולם, הוא יקבל הסתברות קטנה בזכות ה-laplace
+            count = emit_counts[s][a]
+            emissions[s][a] = (count + laplace) / total
 
     for sp in STATES:
         total = sum(trans_counts[sp][s] for s in STATES) + laplace * len(STATES)
         for s in STATES:
             transitions[sp][s] = (trans_counts[sp][s] + laplace) / total
 
+    # חישוב הסתברויות התחלה
     init = {s: laplace for s in STATES}
     init[labels[0]] += 1.0
     z = sum(init.values())
@@ -78,10 +91,14 @@ def viterbi(seq: str, emissions, transitions, init):
     dp = {s: [-math.inf] * T for s in STATES}
     back = {s: [None] * T for s in STATES}
 
+    # אתחול (t=0)
     x0 = seq[0]
     for s in STATES:
+        # אם x0 הוא תו שלא ראינו באימון (למשל N שלא הופיע), ה-emissions יטפל בזה
+        # כי הוספנו את N לאלפבית והשתמשנו ב-Laplace smoothing
         dp[s][0] = log(init[s]) + log(emissions[s][x0])
 
+    # רקורסיה
     for t in range(1, T):
         xt = seq[t]
         for s in STATES:
@@ -94,6 +111,7 @@ def viterbi(seq: str, emissions, transitions, init):
             dp[s][t] = best_score
             back[s][t] = best_sp
 
+    # סיום וחזרה לאחור (Backtracking)
     last = max(STATES, key=lambda s: dp[s][T - 1])
     path = [last]
     for t in range(T - 1, 0, -1):
@@ -116,15 +134,6 @@ def metrics(y_true, y_pred, positive="C"):
     return {"accuracy": acc, "precision": prec, "recall": rec, "f1": f1}
 
 if __name__ == "__main__":
-    fasta_path = "genome.fna"
-    labels_path = "labels_CN.txt"
-
-    seq = read_fasta(fasta_path)
-    labels = read_labels(labels_path)
-
-    emissions, transitions, init = train_supervised_hmm(seq, labels, laplace=1.0)
-    pred = viterbi(seq, emissions, transitions, init)
-
-    print("Transitions:", transitions)
-    print("Emissions:", emissions)
-    print("Metrics:", metrics(labels, pred))
+    # בדיקה מקומית אם מריצים את הקובץ ישירות
+    # (לא ירוץ כשאת מייבאת אותו ב-experiment1)
+    pass

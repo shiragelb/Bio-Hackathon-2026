@@ -45,7 +45,8 @@ def build_labels(gff_path, genome_length):
             end = int(fields[4])
 
             for i in range(start, end):
-                labels[i] = "C"
+                if i < genome_length:
+                    labels[i] = "C"
 
     return "".join(labels)
 
@@ -57,11 +58,13 @@ zip_files = list(DATA_DIR.glob("*.zip"))
 print(f"Found {len(zip_files)} zip files")
 
 for zip_path in zip_files:
-    print(f"\n=== Processing {zip_path.name} ===")
+    # zip_path.stem זה השם של הקובץ בלי הסיומת (למשל "042" מתוך "042.zip")
+    zip_name = zip_path.stem
+    print(f"\n=== Processing {zip_name} ===")
 
-    extract_dir = DATA_DIR / zip_path.stem
+    extract_dir = DATA_DIR / zip_name
 
-    # unzip if needed
+    # Unzip if needed
     if not extract_dir.exists():
         with zipfile.ZipFile(zip_path, "r") as z:
             z.extractall(extract_dir)
@@ -74,7 +77,7 @@ for zip_path in zip_files:
     gcf_dirs = [d for d in assemblies_root.iterdir()
                 if d.is_dir() and d.name.startswith("GCF_")]
 
-    print(f"  Found {len(gcf_dirs)} GCF assemblies")
+    print(f"  Found {len(gcf_dirs)} GCF assemblies inside {zip_name}")
 
     for gcf_dir in gcf_dirs:
         fna_files = list(gcf_dir.glob("*_genomic.fna"))
@@ -87,20 +90,26 @@ for zip_path in zip_files:
         fna_path = fna_files[0]
         gff_path = gff_files[0]
 
+        # קריאת הנתונים
         header, genome_seq = read_fasta(fna_path)
         labels_seq = build_labels(gff_path, len(genome_seq))
 
-        out_genome = PROCESSED_DIR / f"{gcf_dir.name}_genome.fasta"
-        out_labels = PROCESSED_DIR / f"{gcf_dir.name}_labels.fasta"
+        # --- יצירת השם החדש ---
+        # השם יהיה: Escherichia_coli_ + שם התיקייה/זיפ (למשל 042)
+        # תוצאה סופית לדוגמה: Escherichia_coli_042_genome.fasta
+        final_name = f"Escherichia_coli_{zip_name}"
+        
+        out_genome = PROCESSED_DIR / f"{final_name}_genome.fasta"
+        out_labels = PROCESSED_DIR / f"{final_name}_labels.fasta"
 
         with open(out_genome, "w") as f:
             f.write(header + "\n")
             f.write(genome_seq + "\n")
 
         with open(out_labels, "w") as f:
-            f.write(f">{gcf_dir.name}_labels\n")
+            f.write(f">{final_name}_labels\n")
             f.write(labels_seq + "\n")
 
-        print(f"  ✔ {gcf_dir.name} | length={len(genome_seq)}")
+        print(f"  ✔ Saved as: {final_name} | length={len(genome_seq)}")
 
 print("\nAll done.")
