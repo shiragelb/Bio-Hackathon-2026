@@ -1,14 +1,13 @@
 from pathlib import Path
+import zipfile
 
-# ---- paths (for now hard-coded) ----
-FASTA_PATH = Path(r"ncbi_dataset\ncbi_dataset\data\GCF_000005845.2\GCF_000005845.2_ASM584v2_genomic.fna")
-GFF_PATH   = Path(r"ncbi_dataset\ncbi_dataset\data\GCF_000005845.2\genomic.gff")
+DATA_DIR = Path("data")
+PROCESSED_DIR = Path("processed_data")
+PROCESSED_DIR.mkdir(exist_ok=True)
 
-OUT_FASTA = Path("ecoli_genome.fasta")
-OUT_LABELS = Path("ecoli_labels.fasta")
-
-
-# ---- read FASTA ----
+# ======================
+# FASTA reader
+# ======================
 def read_fasta(path):
     header = None
     seq = []
@@ -24,7 +23,9 @@ def read_fasta(path):
     return header, "".join(seq)
 
 
-# ---- parse GFF and build labels ----
+# ======================
+# GFF → label sequence
+# ======================
 def build_labels(gff_path, genome_length):
     labels = ["N"] * genome_length
 
@@ -37,12 +38,11 @@ def build_labels(gff_path, genome_length):
             if len(fields) < 9:
                 continue
 
-            feature_type = fields[2]
-            if feature_type != "CDS":
+            if fields[2] != "CDS":
                 continue
 
-            start = int(fields[3]) - 1  # to 0-based
-            end = int(fields[4])        # inclusive → exclusive
+            start = int(fields[3]) - 1
+            end = int(fields[4])
 
             for i in range(start, end):
                 labels[i] = "C"
@@ -50,21 +50,57 @@ def build_labels(gff_path, genome_length):
     return "".join(labels)
 
 
-# ---- main ----
-header, genome_seq = read_fasta(FASTA_PATH)
-labels_seq = build_labels(GFF_PATH, len(genome_seq))
+# ======================
+# Process all ZIPs
+# ======================
+zip_files = list(DATA_DIR.glob("*.zip"))
+print(f"Found {len(zip_files)} zip files")
 
-# write genome
-with open(OUT_FASTA, "w") as f:
-    f.write(header + "\n")
-    f.write(genome_seq + "\n")
+for zip_path in zip_files:
+    print(f"\n=== Processing {zip_path.name} ===")
 
-# write labels
-with open(OUT_LABELS, "w") as f:
-    f.write(">NC_000913.3_labels\n")
-    f.write(labels_seq + "\n")
+    extract_dir = DATA_DIR / zip_path.stem
 
-print("Done.")
-print(f"Genome length: {len(genome_seq)}")
-print(f"Labels length: {len(labels_seq)}")
-print(f"Coding fraction: {labels_seq.count('C') / len(labels_seq):.3f}")
+    # unzip if needed
+    if not extract_dir.exists():
+        with zipfile.ZipFile(zip_path, "r") as z:
+            z.extractall(extract_dir)
+
+    assemblies_root = extract_dir / "ncbi_dataset" / "data"
+    if not assemblies_root.exists():
+        print("  No ncbi_dataset found, skipping")
+        continue
+
+    gcf_dirs = [d for d in assemblies_root.iterdir()
+                if d.is_dir() and d.name.startswith("GCF_")]
+
+    print(f"  Found {len(gcf_dirs)} GCF assemblies")
+
+    for gcf_dir in gcf_dirs:
+        fna_files = list(gcf_dir.glob("*_genomic.fna"))
+        gff_files = list(gcf_dir.glob("genomic.gff"))
+
+        if not fna_files or not gff_files:
+            print(f"  Skipping {gcf_dir.name} (missing files)")
+            continue
+
+        fna_path = fna_files[0]
+        gff_path = gff_files[0]
+
+        header, genome_seq = read_fasta(fna_path)
+        labels_seq = build_labels(gff_path, len(genome_seq))
+
+        out_genome = PROCESSED_DIR / f"{gcf_dir.name}_genome.fasta"
+        out_labels = PROCESSED_DIR / f"{gcf_dir.name}_labels.fasta"
+
+        with open(out_genome, "w") as f:
+            f.write(header + "\n")
+            f.write(genome_seq + "\n")
+
+        with open(out_labels, "w") as f:
+            f.write(f">{gcf_dir.name}_labels\n")
+            f.write(labels_seq + "\n")
+
+        print(f"  ✔ {gcf_dir.name} | length={len(genome_seq)}")
+
+print("\nAll done.")
