@@ -2,8 +2,7 @@ import math
 from collections import defaultdict
 
 STATES = ("C", "N")
-# הוספנו את N לאלפבית כדי שהמודל ידע לחשב הסתברויות גם עבורו
-ALPHABET = ("A", "C", "G", "T", "N")
+ALPHABET = ("A", "C", "G", "T","N")
 
 def read_fasta(path: str) -> str:
     seq_parts = []
