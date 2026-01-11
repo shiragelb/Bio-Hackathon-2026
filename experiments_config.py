@@ -11,13 +11,13 @@ EXPERIMENTS_CONFIG = [
         },  # similar strains (lab + commensal)
         "test": {
             "ecoli_upec_pathogens":
-                ["Escherichia_coli_CFT073", "Escherichia_coli_UTI89"],          
+                ["E.coli_CFT073", "E.coli_UTI89"],          
                 # tests generalization to moderately pathogenic E. coli (UPEC)
                 "ecoli_intestinal_pathogens":
-                ["Escherichia_coli_O157_H7_Sakai", "Escherichia_coli_O104_H4"], 
+                ["E.coli_O157_H7 Sakai", "E.coli_O104_H4"], 
                 # tests generalization to highly pathogenic E. coli strains
                 "salmonella":
-                ["Salmonella_enterica Typhimurium 14028S", "Salmonella_enterica Typhimurium LT2"],    
+                ["Salmonella enterica_Typhimurium 14028S", "Salmonella enterica_Typhimurium LT2"],    
                 # tests cross-species generalization to a related but more distant enteric species
                 "shigella":
                 ["Shigella_Shigella flexneri 2a 301", "Shigella_Shigella sonnei Ss046"]  
@@ -27,15 +27,15 @@ EXPERIMENTS_CONFIG = [
     {
         "train": {
             "ecoli_diverse_pathogen": 
-            ["CFT073", "UTI89", "O157_H7_Sakai", "O127_H6", "O104_H4", "SE11", "042"]
+            ["E.coli_CFT073", "E.coli_UTI89", "E.coli_O157_H7 Sakai", "E.coli_O127-H6", "E.coli_O104_H4", "E.coli_SE11", "E.coli_042"]
         },
         "test": {
             "ecoli_k12_lab": 
-                ["K12_MG1655", "K12_W3110"],  # lab K-12
+                ["E.coli_K12_MG1655", "E.coli_K12_W3110"],  # lab K-12
             "ecoli_lab_derivatives": 
-                ["BW25113", "B_REL606"],      # lab derivatives
+                ["E.coli_BW25113", "E.coli_B REL606"],      # lab derivatives
             "salmonella": 
-                ["Salmonella_enterica Typhimurium 14028S", "Salmonella_enterica Typhimurium LT2"],    # Salmonella
+                ["Salmonella enterica_Typhimurium 14028S", "Salmonella enterica_Typhimurium LT2"],    # Salmonella
             "shigella": 
                 ["Shigella_Shigella flexneri 2a 301", "Shigella_Shigella sonnei Ss046"]  # Shigella
         }
@@ -43,23 +43,23 @@ EXPERIMENTS_CONFIG = [
     {
         "train": {
             "ecoli_upec": 
-                ["CFT073", "UTI89", "536"]
+                ["E.coli_CFT073", "E.coli_UTI89", "E.coli_536"]
         },
         "test": {
             "ecoli_upec": 
-                ["UMN026"],  # same
+                ["E.coli_UMN026"],  # same
             "ecoli_intestinal_pathogens": 
-                ["Sakai_O157H7", "O127-H6", "K12-MG1655"]  # different
+                ["E.coli_O157_H7 Sakai", "E.coli_O127-H6", "E.coli_K12_MG1655"]  # different
         }
     },
     {
         "train": {
             "shigella_ecoli": 
-                ["Shigella flexneri 2a 301", "Shigella sonnei Ss046", "K12-MG1655", "HS"]
+                ["Shigella_flexneri 2a 301", "Shigella_sonnei Ss046", "E.coli_K12_MG1655", "E.coli_HS"]
         },
         "test": {
             "salmonella": 
-                ["Salmonella_enterica Typhimurium 14028S", "Salmonella_enterica Typhimurium LT2"],
+                ["Salmonella enterica_Typhimurium 14028S", "Salmonella enterica_Typhimurium LT2"],
         }
     }
 ]
