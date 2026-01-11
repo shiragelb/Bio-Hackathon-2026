@@ -5,7 +5,7 @@ import re
 # ======================
 # Config
 # ======================
-DATA_DIR = Path("data")
+DATA_DIR = Path("data\E.coli")
 PROCESSED_DIR = Path("processed_data_2")
 PROCESSED_DIR.mkdir(exist_ok=True)
 
@@ -39,21 +39,18 @@ def read_fasta(path):
     return header, "".join(seq)
 
 # ======================
-# GFF → Detailed Labels (Safe Version with Sanity Checks)
+# GFF → Detailed Labels (Noisy / Trust-GFF Version)
 # ======================
-def build_detailed_labels(gff_path, genome_seq):
-    # חישוב אורך הגנום מתוך הרצף שהתקבל
-    genome_length = len(genome_seq)
-    
+def build_detailed_labels_noisy(gff_path, genome_length):
+    """
+    מייצרת לייבלים אך ורק לפי הקואורדינטות ב-GFF.
+    ללא סינון של קודוני התחלה/סוף וללא בדיקת חלוקה ב-3.
+    """
     # אתחול הכל כ-Non-coding
     labels = ["N"] * genome_length
 
-    # סטים של קודונים חוקיים
-    VALID_STARTS = {"ATG", "GTG", "TTG"} 
-    VALID_STOPS = {"TAA", "TAG", "TGA"}
-
-    # מונים לסטטיסטיקה
-    stats = {"ok": 0, "bad_start": 0, "bad_stop": 0, "partial": 0, "skipped_strand": 0}
+    # מונה סטטיסטיקה פשוטה בלבד
+    count_genes = 0
 
     with open(gff_path, "r") as f:
         for line in f:
@@ -64,76 +61,57 @@ def build_detailed_labels(gff_path, genome_seq):
             if len(fields) < 9:
                 continue
 
-            # סינון: רק אזורים מקודדים (CDS)
+            # סינון בסיסי שחייבים: רק CDS ורק גדיל חיובי (כי המודל שלנו חד-כיווני)
             if fields[2] != "CDS":
                 continue
             
-            # סינון: רק גדיל חיובי (+)
             if fields[6] != "+":
-                stats["skipped_strand"] += 1
                 continue
 
             # המרה ל-0-based
             start = int(fields[3]) - 1
             end = int(fields[4])
+            length = end - start
             
-            # בדיקת גבולות בסיסית
+            # בדיקת גבולות בסיסית (כדי שהקוד לא יקרוס)
             if end > genome_length:
                 continue
             
-            # בדיקת אורך (חייב להתחלק ב-3)
-            if (end - start) % 3 != 0:
+            # בדיקת אורך מינימלית: חייבים לפחות 6 אותיות (3 להתחלה, 3 לסוף)
+            # אם הגן קצר מ-6, אי אפשר פיזית לשים S ו-E בלי שידרסו אחד את השני.
+            if length < 6:
                 continue
 
-            # === Sanity Check: בדיקה מול הרצף האמיתי ===
-            gene_seq = genome_seq[start:end]
-            actual_start = gene_seq[:3]
-            actual_stop = gene_seq[-3:]
+            count_genes += 1
 
-            # בדיקה אם זה גן חלקי (לפי המטא-דאטה)
-            attributes = fields[8]
-            if "partial=true" in attributes:
-                stats["partial"] += 1
-                # כאן מחליטים אם לכלול או לא. ליתר ביטחון נדלג אם זה לא נראה תקין:
-                if actual_start not in VALID_STARTS or actual_stop not in VALID_STOPS:
-                     continue
-
-            # בדיקת קודונים
-            if actual_start not in VALID_STARTS:
-                stats["bad_start"] += 1
-                continue # מדלגים על דאטה שגוי!
-
-            if actual_stop not in VALID_STOPS:
-                stats["bad_stop"] += 1
-                continue # מדלגים על דאטה שגוי!
-
-            stats["ok"] += 1
-
-            # === תיוג המבנה הפנימי ===
+            # === תיוג המבנה הפנימי (בלי שאלות) ===
             
-            # 1. Start Codon -> S
+            # 1. Start Codon -> S (תמיד 3 הראשונים)
             labels[start] = "S"
             labels[start+1] = "S"
             labels[start+2] = "S"
 
-            # 2. Stop Codon -> E
+            # 2. Stop Codon -> E (תמיד 3 האחרונים)
             labels[end-3] = "E"
             labels[end-2] = "E"
             labels[end-1] = "E"
 
             # 3. Internal Codons (1, 2, 3)
+            # ממלאים את האמצע במחזוריות 1,2,3
             current_pos = start + 3
             stop_pos = end - 3
             
+            # אם האורך לא מתחלק ב-3, המחזוריות פשוט תיעצר איפה שהיא תיעצר (למשל ב-1 או ב-2)
+            # והמודל ילמד להתמודד עם זה.
+            state_cycle = ["1", "2", "3"]
+            cycle_idx = 0
+            
             while current_pos < stop_pos:
-                labels[current_pos] = "1"
-                labels[current_pos+1] = "2"
-                labels[current_pos+2] = "3"
-                current_pos += 3
+                labels[current_pos] = state_cycle[cycle_idx % 3]
+                current_pos += 1
+                cycle_idx += 1
 
-    # הדפסת הסטטיסטיקה עבור הקובץ הנוכחי
-    print(f"    Sanity Check: Valid Genes={stats['ok']}, Bad Start={stats['bad_start']}, Bad Stop={stats['bad_stop']}")
-    
+    print(f"    GFF Processing: Labeled {count_genes} genes (Trusted GFF blindly).")
     return "".join(labels)
 
 # ======================
@@ -143,9 +121,6 @@ zip_files = list(DATA_DIR.glob("*.zip"))
 print(f"Found {len(zip_files)} zip files in {DATA_DIR}")
 print(f"Output directory: {PROCESSED_DIR}")
 
-if len(zip_files) == 0:
-    print("Warning: No zip files found! Check if the 'data' folder exists and contains .zip files.")
-
 for zip_path in zip_files:
     zip_name = zip_path.stem
     print(f"\n=== Processing {zip_name} ===")
@@ -154,7 +129,6 @@ for zip_path in zip_files:
 
     # Unzip if needed
     if not extract_dir.exists():
-        print(f"  Extracting {zip_name}...")
         with zipfile.ZipFile(zip_path, "r") as z:
             z.extractall(extract_dir)
 
@@ -171,33 +145,32 @@ for zip_path in zip_files:
         gff_files = list(gcf_dir.glob("genomic.gff"))
 
         if not fna_files or not gff_files:
-            print(f"  Missing fna or gff in {gcf_dir.name}")
             continue
 
         fna_path = fna_files[0]
         gff_path = gff_files[0]
 
-        # קריאה
+        # קריאה (צריך את ה-FASTA רק בשביל האורך וה-Header)
         header, genome_seq = read_fasta(fna_path)
         
-        # === כאן השינוי בקריאה לפונקציה ===
-        # אנחנו מעבירים את genome_seq עצמו ולא רק את האורך
-        labels_seq = build_detailed_labels(gff_path, genome_seq)
+        # === קריאה לפונקציה ה"רועשת" החדשה ===
+        # מעבירים רק את האורך, כי לא מעניין אותנו התוכן (בדיקות תקינות)
+        labels_seq = build_detailed_labels_noisy(gff_path, len(genome_seq))
 
         # שמות קבצים
         final_name = f"Escherichia_coli_{zip_name}"
         out_genome = PROCESSED_DIR / f"{final_name}_genome.fasta"
         out_labels = PROCESSED_DIR / f"{final_name}_labels.fasta"
 
-        # שמירה
+        # שמירה (דורס את הקבצים הקודמים)
         with open(out_genome, "w") as f:
             f.write(header + "\n")
             f.write(genome_seq + "\n")
 
         with open(out_labels, "w") as f:
-            f.write(f">{final_name}_detailed_labels_S_E_123\n")
+            f.write(f">{final_name}_detailed_labels_S_E_123_NO_FILTER\n")
             f.write(labels_seq + "\n")
 
-        print(f"  ✔ Saved: {final_name}")
+        print(f"  ✔ Overwritten/Saved: {final_name}")
 
-print("\nDone. Files ready in processed_data_2/")
+print("\nDone. Files updated in processed_data_2/ (No filtering applied)")
