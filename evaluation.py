@@ -31,80 +31,66 @@ def get_metrics_dict(y_true_raw, y_pred_raw, genome_name="Unknown"):
         'TP': tp, 'FP': fp, 'FN': fn, 'TN': tn
     }
 
-# --- גרף 1: מטריצות בלבול (Grid) ---
-def plot_confusion_matrix_grid(results_list):
+def plot_confusion_matrix_grid(results_list, save_path):
     if not results_list: return
     df = pd.DataFrame(results_list)
     
-    # שימוש בשם הארוך (Category) ככותרת
-    categories = df['Category'].unique()
+    categories = df['Experiment'].unique()
     n_cats = len(categories)
     
-    # חישוב גודל הגריד
     cols = 2
     rows = math.ceil(n_cats / cols)
     
     fig, axes = plt.subplots(rows, cols, figsize=(14, 5 * rows))
-    if n_cats == 1: axes = np.array([axes]) # טיפול במקרה של ניסוי יחיד
+    if n_cats == 1: axes = np.array([axes]) 
     axes = axes.flatten()
     
     for i, cat in enumerate(categories):
-        subset = df[df['Category'] == cat]
+        subset = df[df['Experiment'] == cat]
         
-        # סכימה של המדדים
         total_tp = subset['TP'].sum()
         total_fp = subset['FP'].sum()
         total_fn = subset['FN'].sum()
         total_tn = subset['TN'].sum()
         
         cm = np.array([[total_tn, total_fp], [total_fn, total_tp]])
-        # נרמול לאחוזים
         with np.errstate(divide='ignore', invalid='ignore'):
             cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-            cm_norm = np.nan_to_num(cm_norm) # הגנה מפני חלוקה באפס
+            cm_norm = np.nan_to_num(cm_norm) 
 
-        sns.heatmap(cm_norm, annot=True, fmt='.1%', cmap='Blues', cbar=False,
+        labels = (np.asarray(["{0:,}\n({1:.1%})".format(count, pct)
+                              for count, pct in zip(cm.flatten(), cm_norm.flatten())])
+                  .reshape(2, 2))
+        sns.heatmap(cm_norm, 
+                    annot=labels,
+                    fmt='',
+                    cmap='Blues', cbar=False,
                     xticklabels=['Pred: N', 'Pred: C'],
                     yticklabels=['True: N', 'True: C'],
+                    vmin=0,
+                    vmax=1,
                     ax=axes[i])
         
-        # הקטנת הפונט של הכותרת כדי שהשם הארוך ייכנס
         axes[i].set_title(cat, fontsize=10, fontweight='bold')
         
     for j in range(i + 1, len(axes)):
         axes[j].axis('off')
         
     plt.tight_layout()
-    plt.show()
+    plt.savefig(f"{save_path}/confusion_matrices.png")
 
-# --- גרף 2: השוואה קבוצתית (חכם) ---
-def plot_grouped_benchmark(results_list, metric='F1_Score'):
-    """
-    מפרק אוטומטית את השם 'Train: X | Test: Y' כדי ליצור גרף מקובץ יפה.
-    """
+def plot_grouped_benchmark(results_list, metric='F1_Score', save_path=None):
+
     if not results_list: return
     df = pd.DataFrame(results_list)
-    
-    # לוגיקה חכמה: ננסה לפרק את השם הארוך ל-Train ו-Test באופן זמני רק לגרף הזה
-    def parse_category(cat):
-        if '|' in cat:
-            parts = cat.split('|')
-            # Train יהיה ציר ה-X, Test יהיה הצבע (Hue)
-            return parts[0].strip(), parts[1].strip()
-        return cat, "General"
-
-    # יצירת עמודות זמניות
-    df[['Train_Group', 'Test_Group']] = df['Category'].apply(
-        lambda x: pd.Series(parse_category(x))
-    )
     
     plt.figure(figsize=(14, 8))
     
     sns.barplot(
         data=df, 
-        x='Train_Group', 
+        x='Train', 
         y=metric, 
-        hue='Test_Group',
+        hue='Test',
         palette="viridis", 
         capsize=.05,
         edgecolor=".2"
@@ -116,40 +102,126 @@ def plot_grouped_benchmark(results_list, metric='F1_Score'):
     plt.xticks(rotation=15, ha='right') # סיבוב קל לשמות הארוכים
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', title="Test Condition")
     plt.tight_layout()
-    plt.show()
+    plt.savefig(f"{save_path}/{metric}_grouped_benchmark.png")
 
-# --- גרף 3: התפלגות (Violin) ---
-def plot_violin_distributions(results_list, metric='F1_Score'):
-    if not results_list: return
-    df = pd.DataFrame(results_list)
+
+def get_segments(y_binary):
+    segments = []
+    if len(y_binary) == 0: return segments
+    curr_val = y_binary[0]
+    start = 0
+    for i in range(1, len(y_binary)):
+        if y_binary[i] != curr_val:
+            segments.append((start, i, curr_val))
+            curr_val = y_binary[i]
+            start = i
+    segments.append((start, len(y_binary), curr_val))
+    return segments
+
+def collect_gene_length_stats(y_true_raw, y_pred_raw):
+
+    y_true = np.array([1 if x == 'C' else 0 for x in y_true_raw]) if isinstance(y_true_raw[0], str) else y_true_raw
+    y_pred = np.array([1 if x == 'C' else 0 for x in y_pred_raw]) if isinstance(y_pred_raw[0], str) else y_pred_raw
+
+    true_genes = [s for s in get_segments(y_true) if s[2] == 1]
     
-    plt.figure(figsize=(12, 8)) # הגדלנו קצת כדי שיהיה מקום לשמות
-    sns.violinplot(x='Category', y=metric, data=df, inner="stick", palette="Pastel1", density_norm='width')
+    stats = []
     
-    plt.title(f'Stability Distribution ({metric})', fontsize=16)
-    plt.xticks(rotation=45, ha='right', fontsize=10) # סיבוב חד לשמות ארוכים
-    plt.ylabel(metric)
+    for start, end, _ in true_genes:
+        length = end - start
+        
+        pred_segment = y_pred[start:end]
+        
+        gene_coverage = np.mean(pred_segment)
+        
+        stats.append({
+            'Length': length,
+            'Coverage': gene_coverage 
+        })
+        
+    return stats
+
+def plot_success_by_length_binned(all_length_data, save_path):
+
+    if not all_length_data: return
+
+    df = pd.DataFrame(all_length_data)
+    
+    bins = [0, 50, 100, 200, 300, 450, 600, 1000, 1500, 3000, 10000]
+    labels = ['0-50', '50-100', '100-200', '200-300', '300-450', '450-600', '600-1k', '1k-1.5k', '1.5k-3k', '>3k']
+    
+    df['Length_Bin'] = pd.cut(df['Length'], bins=bins, labels=labels)
+    
+    plt.figure(figsize=(12, 7))
+    
+    # ציור הבר-פלוט
+    sns.barplot(
+        data=df, 
+        x='Length_Bin', 
+        y='Coverage', 
+        hue='Experiment',   
+        palette="magma",
+        errorbar=('ci', 95),  
+        capsize=0.1
+    )
+    
+    plt.title('Prediction Success by Gene Length', fontsize=18)
+    plt.xlabel('Gene Length (bp)', fontsize=12)
+    plt.ylabel('Average Coverage (Recall)', fontsize=12)
+    plt.legend(title='Experiment', bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(axis='y', alpha=0.3)
     plt.tight_layout()
-    plt.show()
+    plt.savefig(f"{save_path}/gene_length_success.png")
 
-# --- הוספה לסוף הקובץ evaluation.py ---
+# --- פונקציה 3: איסוף נתונים לאזורים לא-מקודדים ---
+def collect_non_coding_length_stats(y_true_raw, y_pred_raw):
+    y_true = np.array([1 if x == 'C' else 0 for x in y_true_raw]) if isinstance(y_true_raw[0], str) else y_true_raw
+    y_pred = np.array([1 if x == 'C' else 0 for x in y_pred_raw]) if isinstance(y_pred_raw[0], str) else y_pred_raw
 
-def plot_tuning_curve(tuning_results):
-    """
-    מצייר גרף של F1 Score כתלות בערך ה-Penalty.
-    """
-    if not tuning_results: return
-    df = pd.DataFrame(tuning_results)
+    non_coding_segments = [s for s in get_segments(y_true) if s[2] == 0]
     
-    plt.figure(figsize=(10, 6))
+    stats = []
     
-    # גרף קו: ציר X הוא עוצמת השינוי, ציר Y הוא ה-F1
-    # hue='Genome' מאפשר לראות אם השינוי משפיע אותו דבר על כל הגנומים
-    sns.lineplot(data=df, x='Penalty', y='F1_Score', hue='Genome', marker='o', palette='viridis')
+    for start, end, _ in non_coding_segments:
+        length = end - start
+        
+        pred_segment = y_pred[start:end]
+        
+        success_rate = np.mean(1 - pred_segment)
+        
+        stats.append({
+            'Length': length,
+            'Coverage': success_rate 
+        })
+        
+    return stats
+
+def plot_non_coding_success_by_length(all_length_data, save_path):
+    if not all_length_data: return
+
+    df = pd.DataFrame(all_length_data)
     
-    plt.title('Hyperparameter Tuning: Effect of Transition Penalty on F1', fontsize=16)
-    plt.xlabel('Transition Penalty (Reduction in P(C->C))')
-    plt.ylabel('F1 Score')
-    plt.grid(True, linestyle='--', alpha=0.7)
+    bins = [0, 50, 100, 200, 300, 450, 600, 1000, 2000, 5000]
+    labels = ['0-50', '50-100', '100-200', '200-300', '300-450', '450-600', '600-1k', '1k-2k', '>2k']
+    
+    df['Length_Bin'] = pd.cut(df['Length'], bins=bins, labels=labels)
+    
+    plt.figure(figsize=(12, 7))
+    
+    sns.barplot(
+        data=df, 
+        x='Length_Bin', 
+        y='Coverage', 
+        hue='Experiment',
+        palette="coolwarm", 
+        errorbar=('ci', 95),
+        capsize=0.1
+    )
+    
+    plt.title('Prediction Success by Non-Coding Region Length', fontsize=18)
+    plt.xlabel('Non-Coding Region Length (bp)', fontsize=12)
+    plt.ylabel('Average Success (Prediction of N)', fontsize=12)
+    plt.legend(title='Experiment', bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(axis='y', alpha=0.3)
     plt.tight_layout()
-    plt.show()
+    plt.savefig(f"{save_path}/non_coding_length_success.png")

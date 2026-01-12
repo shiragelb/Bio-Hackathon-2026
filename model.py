@@ -40,7 +40,7 @@ def read_fasta_seq(filepath):
 import numpy as np
 
 def train_high_order_hmm(
-    sequences,
+    seqs,
     labels,
     states,
     alphabet,
@@ -75,12 +75,16 @@ def train_high_order_hmm(
     # ----------------------
     # Index mappings
     # ----------------------
+    if len(alphabet) != 4:
+        alphabet = NUCLEOTIDES
     state_to_idx = {s: i for i, s in enumerate(states)}
     sym_to_idx = {a: i for i, a in enumerate(alphabet)}
 
     n_states = len(states)
     n_symbols = len(alphabet)
     n_contexts = (n_symbols ** order) if order > 0 else 1
+    sequences = [seqs]
+    label_list = [labels]
 
     # ----------------------
     # Initialize counts (Laplace smoothing)
@@ -92,7 +96,7 @@ def train_high_order_hmm(
     # ----------------------
     # Training loop
     # ----------------------
-    for seq, lbl in zip(sequences, labels):
+    for seq, lbl in zip(sequences, label_list):
         if len(seq) != len(lbl):
             continue
 
@@ -143,36 +147,30 @@ def train_high_order_hmm(
 # 2. HIGH-ORDER VITERBI (JIT)
 # ======================
 @jit(nopython=True)
-def fast_high_order_viterbi(seq_ints, emit_probs, trans_probs, start_probs, alphabet, states, order = 5):
+def _jit_calculate_viterbi(seq_ints, emit_probs, trans_probs, start_probs, n_states, order=5):
+    
     # 2. Log Probs
     eps = 1e-10
     start_log = np.log(start_probs + eps)
     trans_log = np.log(trans_probs + eps)
-    emit_log_3d = np.log(emit_probs + eps) # Shape (6, 4^k, 4)
+    emit_log_3d = np.log(emit_probs + eps) 
     
     n_obs = len(seq_ints)
-    n_states = len(states)
-
-    idx_N = states.index('N')
-    idx_S = states.index('S')
-    idx_1 = states.index('1')
-    idx_2 = states.index('2')
-    idx_3 = states.index('3')
-    idx_E = states.index('E')  
+    if n_states != 6:
+        raise ValueError("Expected 6 states (N, S, 1, 2, 3, E)")
+    idx_N, idx_S, idx_1, idx_2, idx_3, idx_E = 0, 1, 2, 3, 4, 5
       
     viterbi = np.full((n_states, n_obs), -np.inf)
     backpointer = np.zeros((n_states, n_obs), dtype=np.int32)
     
-    # Initial Context (AAAA...)
+    # Initial Context
     current_ctx = 0
     mask = (1 << (2 * order)) - 1
     
     # Initialize t=0
     first_nuc = seq_ints[0]
-    # For t=0, context is 0. 
     viterbi[:, 0] = start_log + emit_log_3d[:, 0, first_nuc]
     
-    # Update context for next step
     if order > 0:
         current_ctx = ((current_ctx << 2) | first_nuc) & mask
 
@@ -180,14 +178,14 @@ def fast_high_order_viterbi(seq_ints, emit_probs, trans_probs, start_probs, alph
     for t in range(1, n_obs):
         nuc_idx = seq_ints[t]
         
-        # --- LOOK AHEAD for Constraints ---
+        # --- LOOK AHEAD ---
         is_atg = False
         is_stop = False
         if t + 2 < n_obs:
             n1, n2, n3 = seq_ints[t], seq_ints[t+1], seq_ints[t+2]
-            # ATG (0,3,2)
+            # ATG (0=A, 3=T, 2=G) - בהנחה ש-A=0, C=1, G=2, T=3
             if n1==0 and n2==3 and n3==2: is_atg = True
-            # Stops: TAA(300), TAG(302), TGA(320)
+            # Stops: TAA, TAG, TGA
             if n1==3:
                 if (n2==0 and n3==0) or (n2==0 and n3==2) or (n2==2 and n3==0):
                     is_stop = True
@@ -200,13 +198,10 @@ def fast_high_order_viterbi(seq_ints, emit_probs, trans_probs, start_probs, alph
                 score = viterbi[prev_s, t-1] + trans_log[prev_s, curr_s]
                 
                 # --- CONSTRAINTS ---
-                # 1. Start (N->S needs ATG)
                 if curr_s == idx_S and prev_s == idx_N:
                     if not is_atg: score = -np.inf
-                # 2. Stop (3->E needs Stop)
                 if curr_s == idx_E and prev_s == idx_3:
                     if not is_stop: score = -np.inf
-                # 3. Steamroller (3->1 forbidden at Stop)
                 if curr_s == idx_1 and prev_s == idx_3:
                     if is_stop: score = -np.inf
                 
@@ -214,14 +209,10 @@ def fast_high_order_viterbi(seq_ints, emit_probs, trans_probs, start_probs, alph
                     best_score = score
                     best_prev = prev_s
             
-            # --- HIGH ORDER EMISSION LOOKUP ---
-            # We use 'current_ctx' which represents prev nucleotides
             emission = emit_log_3d[curr_s, current_ctx, nuc_idx]
-            
             viterbi[curr_s, t] = best_score + emission
             backpointer[curr_s, t] = best_prev
 
-        # Update Context for next step 't+1'
         if order > 0:
             current_ctx = ((current_ctx << 2) | nuc_idx) & mask
 
@@ -232,6 +223,45 @@ def fast_high_order_viterbi(seq_ints, emit_probs, trans_probs, start_probs, alph
         path[t] = backpointer[path[t+1], t+1]
     
     return path
+
+
+def run_high_order_viterbi(seq_str, emit_probs, trans_probs, start_probs, states, alphabet):
+    """
+    מבצעת את כל עבודת ה'מחרוזות' בפייתון רגיל, 
+    ורק אז שולחת מספרים ל-JIT.
+    """
+    if len(alphabet) != 4:
+        alphabet = NUCLEOTIDES
+    # יצירת המילון (בפייתון רגיל זה עובד מצוין)
+    nuc_to_idx = {n: i for i, n in enumerate(alphabet)}
+    
+    # המרת המחרוזת למספרים (בפייתון רגיל)
+    # משתמשים ב-N (אינדקס 4) כברירת מחדל אם יש תו לא מוכר
+    default_idx = nuc_to_idx.get('N', 0)
+    seq_ints = np.array([nuc_to_idx.get(c, default_idx) for c in seq_str], dtype=np.int32)
+    
+    # שליחה ל-JIT
+    path_indices = _jit_calculate_viterbi(
+        seq_ints, 
+        emit_probs, 
+        trans_probs, 
+        start_probs, 
+        n_states=len(states), 
+        order=5
+    )
+    print("Viterbi path indices calculated.", path_indices)
+    
+    # המרה חזרה למחרוזת (בפייתון רגיל)
+    pred_str = ""
+    for idx in path_indices:
+        state_name = states[idx]
+        if state_name == 'N':
+            pred_str += 'N'
+        else:
+            # כל מה שהוא לא N (כלומר S, 1, 2, 3, E) נחשב C
+            pred_str += 'C'
+    
+    return pred_str
 
 # ======================
 # STATS & PLOTTING
@@ -337,7 +367,7 @@ if __name__ == "__main__":
         print(f"\n>>> Running Exp: CUSTOM ORDER {k} (With Constraints)...")
         
         # 1. Train
-        emmitions_p_3d, trans_prob, start_prob = get_train_data_high_order(order=k)
+        emmitions_p_3d, trans_prob, start_prob = train_high_order_hmm(order=k)
         
         # 2. Log Probs
         # eps = 1e-10
@@ -348,7 +378,7 @@ if __name__ == "__main__":
         # 3. Run Viterbi
         start_time = time.time()
         # Numba needs fixed types. e_log is 3D float array.
-        pred_path = fast_high_order_viterbi(seq_ints, emmitions_p_3d, trans_prob, start_prob, order=k)
+        pred_path = run_high_order_viterbi(seq_ints, emmitions_p_3d, trans_prob, start_prob, order=k)
         print(f"Done ({time.time()-start_time:.2f}s)")
         
         # 4. Stats
