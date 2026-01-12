@@ -1,12 +1,12 @@
 STATES = ("C", "N")
 STATES_MORE_HIDDEN_STATES = ['N', 'S', '1', '2', '3', 'E']
 ALPHABET = ("A", "C", "G", "T", "N")
+ALPHABET_NO_N = ("A", "C", "G", "T")
 
 MODEL_CONFIG = {
     "basic": {
         "states": STATES,
         "alphabet": ALPHABET,
-        "laplace_smoothing": 1.0,
         "base_path": "processed",
         "module_name": "hmm",               # שם הקובץ (בלי .py)
         "train_func": "train_supervised_hmm", # שם פונקציית האימון
@@ -14,12 +14,11 @@ MODEL_CONFIG = {
     },
     "more_hidden_states": {
         "states": STATES_MORE_HIDDEN_STATES,
-        "alphabet": ALPHABET,
-        "laplace_smoothing": 1.0,
-        "base_path": "processed_data_2",
+        "alphabet": ALPHABET_NO_N,
+        "base_path": "preprocessed_5_hidden_states",
         "module_name": "model",               # שם הקובץ (בלי .py)
-        "train_func": "get_train_data_high_order", # שם פונקציית האימון
-        "viterbi_func": "fast_high_order_viterbi"           # שם פונקציית החיזוי
+        "train_func": "train_high_order_hmm", # שם פונקציית האימון
+        "viterbi_func": "run_high_order_viterbi"           # שם פונקציית החיזוי
     }
 }
 

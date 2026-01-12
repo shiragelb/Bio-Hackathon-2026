@@ -38,11 +38,11 @@ def run_pipeline(model):
             train_labels = ""
             try:
                 for genome_file, label_file in train_files:
-                    train_seq += read_fasta(f"{base_path}/{genome_file}")
-                    train_labels += read_labels(f"{base_path}/{label_file}")
+                    train_seq += read_fasta(f"{base_path}/{genome_file}", alphabet=config["alphabet"])
+                    train_labels += read_labels(f"{base_path}/{label_file}", states=config["states"])
                 
                 print(f"Training on {len(train_seq)} bp...")
-                emissions, transitions, init = train_func(train_seq, train_labels, config["states"], config["alphabet"], config["laplace_smoothing"])
+                emissions, transitions, init = train_func(train_seq, train_labels, config["states"], config["alphabet"])
             except Exception as e:
                 print(f"Error during training for group {train_group_name}: {e}")
                 continue
@@ -60,10 +60,10 @@ def run_pipeline(model):
                     for test_genome, test_label_file in test_files:
                         print(f"Testing on {test_genome}...")
                         
-                        t_seq = read_fasta(f"{base_path}/{test_genome}")
-                        t_true = read_labels(f"{base_path}/{test_label_file}")
+                        t_seq = read_fasta(f"{base_path}/{test_genome}", alphabet=config["alphabet"])
+                        t_true = read_labels(f"{base_path}/{test_label_file}", states=config["states"])
                                                 
-                        t_pred = viterbi_func(t_seq, emissions, transitions, init, config["states"])
+                        t_pred = viterbi_func(t_seq, emissions, transitions, init, config["states"], config["alphabet"])
 
                         length_stats = ev.collect_gene_length_stats(t_true, t_pred)
                         
@@ -96,7 +96,7 @@ def run_pipeline(model):
                 df_res = pd.DataFrame(results)
                 print(df_res[['Train', 'Test', 'Precision', 'Recall', 'F1_Score']])
                 
-                path = f"plots/{train_group_name}"
+                path = f"plots/{model}/{train_group_name}"
                 Path(path).mkdir(parents=True, exist_ok=True)
                 ev.plot_grouped_benchmark(results, metric='F1_Score', save_path=path) 
                 ev.plot_confusion_matrix_grid(results, save_path=path)                
@@ -110,4 +110,4 @@ def run_pipeline(model):
                 print("No results generated.")
 
 if __name__ == "__main__":
-    run_pipeline("basic")
+    run_pipeline("more_hidden_states")

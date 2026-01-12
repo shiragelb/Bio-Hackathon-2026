@@ -1,7 +1,7 @@
 import math
 from collections import defaultdict
 
-def read_fasta(path: str) -> str:
+def read_fasta(path: str, alphabet) -> str:
     seq_parts = []
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
@@ -11,9 +11,8 @@ def read_fasta(path: str) -> str:
             seq_parts.append(line.upper())
     seq = "".join(seq_parts)
 
-    # תיקון: במקום לזרוק שגיאה על אותיות לא מוכרות, נמיר אותן ל-N
-    # W, R, Y, M, K, S, etc. -> N
-    valid_chars = set("ACGT")
+
+    valid_chars = set(alphabet)
     cleaned_seq = []
     for ch in seq:
         if ch in valid_chars:
@@ -23,7 +22,7 @@ def read_fasta(path: str) -> str:
             
     return "".join(cleaned_seq)
 
-def read_labels(path: str) -> str:
+def read_labels(path: str, states) -> str:
     parts = []
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
@@ -33,9 +32,9 @@ def read_labels(path: str) -> str:
             parts.append("".join(line.split()))
     s = "".join(parts)
 
-    bad = {ch for ch in s if ch not in {"C", "N"}}
+    bad = {ch for ch in s if ch not in set(states)}
     if bad:
-        raise ValueError(f"Labels contain invalid characters: {sorted(bad)} (allowed: C/N)")
+        raise ValueError(f"Labels contain invalid characters: {sorted(bad)} (allowed: {sorted(states)})")
     return s
 
 def train_supervised_hmm(seq: str, labels: str, states, alphabet, laplace: float = 1.0):
@@ -81,7 +80,7 @@ def train_supervised_hmm(seq: str, labels: str, states, alphabet, laplace: float
 
     return emissions, transitions, init
 
-def viterbi(seq: str, emissions, transitions, init, states):
+def viterbi(seq: str, emissions, transitions, init, states, alphabet=None):
     T = len(seq)
     log = math.log
 
