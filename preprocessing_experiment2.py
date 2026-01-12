@@ -4,7 +4,7 @@ import zipfile
 # ======================
 # Config
 # ======================
-DATA_DIR = Path("data")
+DATA_DIR = Path("data\E.coli")
 PROCESSED_DIR = Path("processed_data_2")
 PROCESSED_DIR.mkdir(exist_ok=True)
 
