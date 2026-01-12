@@ -37,90 +37,113 @@ def read_fasta_seq(filepath):
 # ======================
 # 1. ADVANCED TRAINING (Variable Order)
 # ======================
-def get_train_data_high_order(order=5):
-    """
-    Trains an emission model of order 'k'.
-    Order 0: P(Nuc | State) (Standard)
-    Order 5: P(Nuc | Prev 5 Nucs, State)
-    """
-    all_files = list(BASE_DIR.glob("*_genome.fasta"))
-    TRAIN_FILES = []
-    
-    for g in all_files:
-        if g.name == TEST_GENOME_NAME: continue
-        l_name = g.name.replace("_genome.fasta", "_labels.fasta")
-        if (BASE_DIR / l_name).exists():
-            TRAIN_FILES.append((g.name, l_name))
+import numpy as np
 
-    print(f"Training Order-{order} Model on {len(TRAIN_FILES)} genomes...")
-    
-    n_states = len(STATES)
-    n_symbols = len(NUCLEOTIDES)
-    
-    # Context Size: 4^order (e.g., Order 2 -> 4^2 = 16 contexts)
-    n_contexts = 4 ** order
-    
-    # Matrices
-    # Trans and Start are always 0th order (State -> State)
-    trans_counts = np.ones((n_states, n_states))
+def train_high_order_hmm(
+    sequences,
+    labels,
+    states,
+    alphabet,
+    order=5
+):
+    """
+    Train a supervised high-order HMM.
+
+    Parameters
+    ----------
+    sequences : list[str]
+        List of observation sequences (e.g. DNA strings)
+    labels : list[str]
+        Corresponding list of state label sequences
+    states : list[str]
+        List of possible states (e.g. ['N','S','1','2','3','E'])
+    alphabet : list[str]
+        Observation alphabet (e.g. ['A','C','G','T'])
+    order : int
+        Emission order (0 = standard HMM)
+
+    Returns
+    -------
+    emit_prob : np.ndarray
+        Shape (n_states, 4^order, |alphabet|)
+    trans_prob : np.ndarray
+        Shape (n_states, n_states)
+    start_prob : np.ndarray
+        Shape (n_states,)
+    """
+
+    # ----------------------
+    # Index mappings
+    # ----------------------
+    state_to_idx = {s: i for i, s in enumerate(states)}
+    sym_to_idx = {a: i for i, a in enumerate(alphabet)}
+
+    n_states = len(states)
+    n_symbols = len(alphabet)
+    n_contexts = (n_symbols ** order) if order > 0 else 1
+
+    # ----------------------
+    # Initialize counts (Laplace smoothing)
+    # ----------------------
     start_counts = np.ones(n_states)
-    
-    # Emission: [State, Context_Index, Next_Nucleotide]
-    # We use ones() for Laplace Smoothing (so we never have 0 probability)
+    trans_counts = np.ones((n_states, n_states))
     emit_counts = np.ones((n_states, n_contexts, n_symbols))
-    
-    for g_file, l_file in TRAIN_FILES:
-        g_seq = read_fasta_seq(g_file)
-        l_seq = read_fasta_seq(l_file)
-        if len(g_seq) != len(l_seq): continue
-        
-        # We process the sequence
-        # We need to maintain a "rolling context"
-        
-        # Convert entire sequence to ints for speed
-        seq_ints = [nuc_to_idx.get(c, 0) for c in g_seq] # Default to A if N
-        
-        # Mask to keep only the last 'order' bits (for bitwise shift)
-        # e.g. for Order 2 (4 bits), mask is 1111 binary = 15
-        mask = (1 << (2 * order)) - 1
-        
-        current_ctx = 0 # Start with context 0 (AAAA...)
-        
-        for t in range(len(g_seq)):
-            s_idx = state_to_idx.get(l_seq[t])
+
+    # ----------------------
+    # Training loop
+    # ----------------------
+    for seq, lbl in zip(sequences, labels):
+        if len(seq) != len(lbl):
+            continue
+
+        # Convert sequence to integer indices
+        seq_ints = [sym_to_idx.get(c, 0) for c in seq]
+
+        # Context handling
+        current_ctx = 0
+        if order > 0:
+            mask = (1 << (2 * order)) - 1
+
+        for t in range(len(seq)):
+            s_char = lbl[t]
+            if s_char not in state_to_idx:
+                continue
+
+            s_idx = state_to_idx[s_char]
             n_idx = seq_ints[t]
-            
-            if s_idx is None: continue
-            
-            # Update counts
-            if t == 0: start_counts[s_idx] += 1
-            
-            # Emission Count: State + Context -> Nucleotide
+
+            # Start probability
+            if t == 0:
+                start_counts[s_idx] += 1
+
+            # Emission count
             emit_counts[s_idx, current_ctx, n_idx] += 1
-            
-            # Transition Count
-            if t < len(g_seq) - 1:
-                next_s = state_to_idx.get(l_seq[t+1])
-                if next_s is not None: trans_counts[s_idx, next_s] += 1
-            
-            # Update Context (Shift left, add new nucleotide, mask)
-            # This effectively slides the window by 1
+
+            # Transition count
+            if t < len(seq) - 1:
+                next_state = lbl[t + 1]
+                if next_state in state_to_idx:
+                    trans_counts[s_idx, state_to_idx[next_state]] += 1
+
+            # Update context
             if order > 0:
                 current_ctx = ((current_ctx << 2) | n_idx) & mask
 
-    # Normalize
+    # ----------------------
+    # Normalize to probabilities
+    # ----------------------
     start_prob = start_counts / start_counts.sum()
     trans_prob = trans_counts / trans_counts.sum(axis=1, keepdims=True)
-    # Normalize emission along the last axis (sum of A,C,G,T must be 1)
     emit_prob = emit_counts / emit_counts.sum(axis=2, keepdims=True)
-    
-    return emit_prob, trans_prob, start_prob 
+
+    return emit_prob, trans_prob, start_prob
+
 
 # ======================
 # 2. HIGH-ORDER VITERBI (JIT)
 # ======================
 @jit(nopython=True)
-def fast_high_order_viterbi(seq_ints, emit_probs, trans_probs, start_probs, order = 5):
+def fast_high_order_viterbi(seq_ints, emit_probs, trans_probs, start_probs, alphabet, states, order = 5):
     # 2. Log Probs
     eps = 1e-10
     start_log = np.log(start_probs + eps)
@@ -128,9 +151,15 @@ def fast_high_order_viterbi(seq_ints, emit_probs, trans_probs, start_probs, orde
     emit_log_3d = np.log(emit_probs + eps) # Shape (6, 4^k, 4)
     
     n_obs = len(seq_ints)
-    n_states = 6
-    idx_N, idx_S, idx_1, idx_2, idx_3, idx_E = 0, 1, 2, 3, 4, 5
-    
+    n_states = len(states)
+
+    idx_N = states.index('N')
+    idx_S = states.index('S')
+    idx_1 = states.index('1')
+    idx_2 = states.index('2')
+    idx_3 = states.index('3')
+    idx_E = states.index('E')  
+      
     viterbi = np.full((n_states, n_obs), -np.inf)
     backpointer = np.zeros((n_states, n_obs), dtype=np.int32)
     
