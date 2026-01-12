@@ -58,7 +58,13 @@ def plot_confusion_matrix_grid(results_list, save_path):
             cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
             cm_norm = np.nan_to_num(cm_norm) 
 
-        sns.heatmap(cm_norm, annot=True, fmt='.1%', cmap='Blues', cbar=False,
+        labels = (np.asarray(["{0:,}\n({1:.1%})".format(count, pct)
+                              for count, pct in zip(cm.flatten(), cm_norm.flatten())])
+                  .reshape(2, 2))
+        sns.heatmap(cm_norm, 
+                    annot=labels,
+                    fmt='',
+                    cmap='Blues', cbar=False,
                     xticklabels=['Pred: N', 'Pred: C'],
                     yticklabels=['True: N', 'True: C'],
                     vmin=0,
@@ -77,18 +83,6 @@ def plot_grouped_benchmark(results_list, metric='F1_Score', save_path=None):
 
     if not results_list: return
     df = pd.DataFrame(results_list)
-    
-    # def parse_category(cat):
-    #     if '|' in cat:
-    #         parts = cat.split('|')
-    #         # Train יהיה ציר ה-X, Test יהיה הצבע (Hue)
-    #         return parts[0].strip(), parts[1].strip()
-    #     return cat, "General"
-
-    # # יצירת עמודות זמניות
-    # df[['Train_Group', 'Test_Group']] = df['Category'].apply(
-    #     lambda x: pd.Series(parse_category(x))
-    # )
     
     plt.figure(figsize=(14, 8))
     

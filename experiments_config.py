@@ -35,7 +35,7 @@ EXPERIMENTS_CONFIG = [
                 ["Salmonella enterica_Typhimurium 14028S", "Salmonella enterica_Typhimurium LT2"],    
                 # tests cross-species generalization to a related but more distant enteric species
                 "shigella":
-                ["Shigella_Shigella flexneri 2a 301", "Shigella_Shigella sonnei Ss046"]  
+                ["Shigella_Shigella flexneri 2a 301"]  
                 # tests cross-species generalization to very closely related E. coli-like bacteria
         }
     },
@@ -52,7 +52,7 @@ EXPERIMENTS_CONFIG = [
             "salmonella": 
                 ["Salmonella enterica_Typhimurium 14028S", "Salmonella enterica_Typhimurium LT2"],    # Salmonella
             "shigella": 
-                ["Shigella_Shigella flexneri 2a 301", "Shigella_Shigella sonnei Ss046"]  # Shigella
+                ["Shigella_Shigella flexneri 2a 301"]  # Shigella
         }
     },
     {
@@ -64,13 +64,13 @@ EXPERIMENTS_CONFIG = [
             "ecoli_upec": 
                 ["E.coli_UMN026"],  # same
             "ecoli_intestinal_pathogens": 
-                ["E.coli_O157_H7 Sakai", "E.coli_O127-H6", "E.coli_K12_MG1655"]  # different
+                ["E.coli_O157_H7 Sakai", "E.coli_O127-H6", "E.coli_K12-MG1655"]  # different
         }
     },
     {
         "train": {
             "shigella_ecoli": 
-                ["Shigella_Shigella flexneri 2a 301", "Shigella_Shigella sonnei Ss046", "E.coli_K12_MG1655", "E.coli_HS"]
+                ["Shigella_Shigella flexneri 2a 301", "E.coli_K12-MG1655", "E.coli_HS"]
         },
         "test": {
             "salmonella": 
