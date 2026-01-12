@@ -1,8 +1,23 @@
-"""
-EXPERIMENT1:
-Train on closely related, non-pathogenic E. coli laboratory and commensal strains,
-and evaluate generalization to pathogenic E. coli strains and to related enteric species.
-"""
+STATES = ("C", "N")
+STATES_MORE_HIDDEN_STATES = ['N', 'S', '1', '2', '3', 'E']
+ALPHABET = ("A", "C", "G", "T","N")
+
+MODEL_CONFIG = {
+    "basic": {
+        "states": STATES,
+        "alphabet": ALPHABET,
+        "laplace_smoothing": 1.0,
+        "base_path": "processed"
+    },
+    "more_hidden_states": {
+        "states": STATES_MORE_HIDDEN_STATES,
+        "alphabet": ALPHABET,
+        "laplace_smoothing": 1.0,
+        "base_path": "processed_data_2"
+    }
+}
+
+
 EXPERIMENTS_CONFIG = [
     {
         "train": {

@@ -4,12 +4,13 @@ from hmm import (
     train_supervised_hmm, viterbi
 )
 import evaluation as ev
-from experiments_config import EXPERIMENTS_CONFIG, EXPERIMENTS_CONFIG_TEMP
+from experiments_config import EXPERIMENTS_CONFIG, MODEL_CONFIG
 
-BASE = "processed_data"
 
-def run_pipeline():
+def run_pipeline(model):
     all_results = [] 
+    config = MODEL_CONFIG[model]
+    base_path = config["base_path"]
 
     for exp in EXPERIMENTS_CONFIG:
         for train_group_name, train_strains_list in exp['train'].items():
@@ -31,19 +32,19 @@ def run_pipeline():
                 train_labels = ""
                 try:
                     for genome_file, label_file in train_files:
-                        train_seq += read_fasta(f"{BASE}/{genome_file}")
-                        train_labels += read_labels(f"{BASE}/{label_file}")
+                        train_seq += read_fasta(f"{base_path}/{genome_file}")
+                        train_labels += read_labels(f"{base_path}/{label_file}")
                     
                     print(f"Training on {len(train_seq)} bp...")
-                    emissions, transitions, init = train_supervised_hmm(train_seq, train_labels)
+                    emissions, transitions, init = train_supervised_hmm(train_seq, train_labels,config["states"], config["alphabet"], config["laplace_smoothing"])
                     
                     for test_genome, test_label_file in test_files:
                         print(f"Testing on {test_genome}...")
                         
-                        t_seq = read_fasta(f"{BASE}/{test_genome}")
-                        t_true = read_labels(f"{BASE}/{test_label_file}")
+                        t_seq = read_fasta(f"{base_path}/{test_genome}")
+                        t_true = read_labels(f"{base_path}/{test_label_file}")
                                                 
-                        t_pred = viterbi(t_seq, emissions, transitions, init)
+                        t_pred = viterbi(t_seq, emissions, transitions, init, config["states"])
 
                         clean_genome_name = test_genome.replace("_genome.fasta", "")
                         metrics = ev.get_metrics_dict(t_true, t_pred, genome_name=clean_genome_name)
@@ -69,4 +70,4 @@ def run_pipeline():
         print("No results generated.")
 
 if __name__ == "__main__":
-    run_pipeline()
+    run_pipeline("basic")
