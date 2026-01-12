@@ -70,7 +70,7 @@ EXPERIMENTS_CONFIG = [
     {
         "train": {
             "shigella_ecoli": 
-                ["Shigella_flexneri 2a 301", "Shigella_sonnei Ss046", "E.coli_K12_MG1655", "E.coli_HS"]
+                ["Shigella_Shigella flexneri 2a 301", "Shigella_Shigella sonnei Ss046", "E.coli_K12_MG1655", "E.coli_HS"]
         },
         "test": {
             "salmonella": 
@@ -83,12 +83,22 @@ EXPERIMENTS_CONFIG = [
 EXPERIMENTS_CONFIG_TEMP = [
     {
         "train": {
-            "ecoli_temp":
-              ["Escherichia_coli_K12-MG1655", "Escherichia_coli_E. coli B REL606", "Escherichia_coli_HS","Escherichia_coli_SE11"]
-        },
+            "ecoli_commensal_lab":
+              ["E.coli_K12-MG1655", "E.coli_K12_W3110", "E.coli_BW25113","E.coli_B REL606", "E.coli_HS"]
+        },  # similar strains (lab + commensal)
         "test": {
-            "ecoli_temp_test":
-                ["Escherichia_coli_042"],          
+            "ecoli_upec_pathogens":
+                ["E.coli_CFT073", "E.coli_UTI89"],          
+                # tests generalization to moderately pathogenic E. coli (UPEC)
+                "ecoli_intestinal_pathogens":
+                ["E.coli_O157_H7 Sakai", "E.coli_O104_H4"], 
+                # tests generalization to highly pathogenic E. coli strains
+                "salmonella":
+                ["Salmonella enterica_Typhimurium 14028S", "Salmonella enterica_Typhimurium LT2"],    
+                # tests cross-species generalization to a related but more distant enteric species
+                "shigella":
+                ["Shigella_Shigella flexneri 2a 301", "Shigella_Shigella sonnei Ss046"]  
+                # tests cross-species generalization to very closely related E. coli-like bacteria
         }
     }
 ]
