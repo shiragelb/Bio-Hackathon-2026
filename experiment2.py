@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import time
+import matplotlib.pyplot as plt
+
 
 # ======================
 # Config & Constants
@@ -12,13 +14,22 @@ BASE_DIR = Path("processed_data_2")
 STATES = ['N', 'S', '1', '2', '3', 'E']
 NUCLEOTIDES = ['A', 'C', 'G', 'T']
 
+ALLOWED_TRANSITIONS = {
+    'N': ['N', 'S'],
+    'S': ['1'],
+    '1': ['2'],
+    '2': ['3'],
+    '3': ['1', 'E'],
+    'E': ['N']
+}
+
 state_to_idx = {s: i for i, s in enumerate(STATES)}
 nuc_to_idx = {n: i for i, n in enumerate(NUCLEOTIDES)}
 
 # רשימת הקבצים לאימון
 TRAIN_FILES = [
     ("Escherichia_coli_K12-MG1655_genome.fasta", "Escherichia_coli_K12-MG1655_labels.fasta"),
-    ("Escherichia_coli_E. coli B REL606_genome.fasta", "Escherichia_coli_E. coli B REL606_labels.fasta"),
+    ("Escherichia_coli_B REL606_genome.fasta", "Escherichia_coli_B REL606_labels.fasta"),
     ("Escherichia_coli_HS_genome.fasta", "Escherichia_coli_HS_labels.fasta"),
     ("Escherichia_coli_SE11_genome.fasta", "Escherichia_coli_SE11_labels.fasta"),
 ]
@@ -38,6 +49,55 @@ def read_fasta_file(path):
         lines = f.readlines()
     # מדלגים על השורה הראשונה (header) וקוראים את השאר
     return "".join(line.strip().upper() for line in lines[1:])
+
+def plot_coding_confusion_matrix(y_true, y_pred, save_path=None):
+    """
+    Plot confusion matrix (% per true class) for Coding vs Non-coding
+    """
+
+    y_true = np.array(list(y_true))
+    y_pred = np.array(y_pred)
+
+    # True / Pred coding masks
+    true_coding = np.isin(y_true, ['S','1','2','3','E'])
+    pred_coding = np.isin(y_pred, ['S','1','2','3','E'])
+
+    # Confusion counts
+    TN = np.sum(~true_coding & ~pred_coding)
+    FP = np.sum(~true_coding &  pred_coding)
+    FN = np.sum( true_coding & ~pred_coding)
+    TP = np.sum( true_coding &  pred_coding)
+
+    # Confusion matrix (rows = true class)
+    cm = np.array([
+        [TN, FP],   # True N
+        [FN, TP]    # True C
+    ], dtype=float)
+
+    # Normalize per row → percentages
+    cm_percent = 100 * cm / cm.sum(axis=1, keepdims=True)
+
+    # Plot
+    plt.figure(figsize=(6, 5))
+    im = plt.imshow(cm_percent, cmap="Blues")
+
+    plt.colorbar(im, fraction=0.046, pad=0.04)
+    plt.xticks([0, 1], ["Pred N", "Pred C"])
+    plt.yticks([0, 1], ["True N", "True C"])
+    plt.title("Confusion Matrix (% per true class)")
+
+    # Write numbers inside cells
+    for i in range(2):
+        for j in range(2):
+            plt.text(j, i, f"{cm_percent[i, j]:.2f}",
+                     ha="center", va="center", color="black", fontsize=11)
+
+    plt.tight_layout()
+
+    if save_path is not None:
+        plt.savefig(save_path, dpi=300)
+
+    plt.show()
 
 def train_hmm(file_pairs, base_dir):
     """
@@ -112,7 +172,7 @@ def train_hmm(file_pairs, base_dir):
 
     return trans_probs, emit_probs, start_probs
 
-def viterbi_log(obs_seq, trans_probs, emit_probs, start_probs):
+def viterbi_log(obs_seq, trans_probs, emit_probs, start_probs, transition_mask):
     """
     מימוש יעיל של ויטרבי במרחב הלוגריתמי.
     """
@@ -145,7 +205,7 @@ def viterbi_log(obs_seq, trans_probs, emit_probs, start_probs):
             print(f"  ... step {t}/{n_obs}")
         
         # Broadcasting להוספת המעברים לערכים הקודמים
-        scores = V[t-1][:, None] + log_trans
+        scores = V[t-1][:, None] + log_trans + transition_mask
         
         # מציאת המקסימום
         best_prev = np.argmax(scores, axis=0)
@@ -163,6 +223,27 @@ def viterbi_log(obs_seq, trans_probs, emit_probs, start_probs):
         path[t] = B[t+1, path[t+1]]
 
     return [STATES[i] for i in path]
+
+def build_transition_mask(states, allowed):
+    n = len(states)
+    mask = np.full((n, n), -np.inf)
+    
+    for from_state, to_states in allowed.items():
+        i = state_to_idx[from_state]
+        for to_state in to_states:
+            j = state_to_idx[to_state]
+            mask[i, j] = 0.0  # log(1)
+    
+    return mask
+
+
+def coding_metrics(y_true, y_pred):
+    true_coding = np.isin(list(y_true), ['S','1','2','3','E'])
+    pred_coding = np.isin(list(y_pred), ['S','1','2','3','E'])
+
+    acc = np.mean(true_coding == pred_coding)
+    print(f"\nCoding vs Non-coding Accuracy: {acc:.4f}")
+
 
 def calculate_metrics(y_true, y_pred):
     """חישוב דיוק כללי ודיוק פר-מצב"""
@@ -216,18 +297,35 @@ if __name__ == "__main__":
         # === הערה: ===
         # השורה למטה מקצרת את הריצה ל-100,000 התווים הראשונים בלבד לצורך בדיקה מהירה.
         # כדי להריץ על כל הגנום (ייקח כמה דקות), שימי את השורות האלו בהערה (#).
-        test_seq = test_seq[:100000]
-        true_labels = true_labels[:100000]
+        # test_seq = test_seq[:100000]
+        # true_labels = true_labels[:100000]
         
         # הרצת ויטרבי
         start_time = time.time()
-        predicted_labels = viterbi_log(test_seq, t_mat, e_mat, pi_vec)
+        transition_mask = build_transition_mask(STATES, ALLOWED_TRANSITIONS)
+
+        predicted_labels = viterbi_log(
+            test_seq,
+            t_mat,
+            e_mat,
+            pi_vec,
+            transition_mask
+        )        
         end_time = time.time()
         
         print(f"Viterbi completed in {end_time - start_time:.2f} seconds.")
         
         # 3. הערכה
         calculate_metrics(true_labels, predicted_labels)
+        coding_metrics(true_labels, predicted_labels)
         
     else:
         print(f"Test file not found: {test_g_path}")
+    
+    calculate_metrics(true_labels, predicted_labels)
+    coding_metrics(true_labels, predicted_labels)
+    plot_coding_confusion_matrix(
+        true_labels,
+        predicted_labels,
+        save_path="results/coding_confusion_matrix_Ecoli042.png"
+    )
