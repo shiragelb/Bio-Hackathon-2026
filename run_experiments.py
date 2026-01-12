@@ -38,6 +38,7 @@ def run_pipeline(model):
                     print(f"Training on {len(train_seq)} bp...")
                     emissions, transitions, init = train_supervised_hmm(train_seq, train_labels,config["states"], config["alphabet"], config["laplace_smoothing"])
                     
+                    ##
                     for test_genome, test_label_file in test_files:
                         print(f"Testing on {test_genome}...")
                         
