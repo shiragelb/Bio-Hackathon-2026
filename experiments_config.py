@@ -7,7 +7,7 @@ EXPERIMENTS_CONFIG = [
     {
         "train": {
             "ecoli_commensal_lab":
-              ["K12_MG1655", "K12_W3110", "BW25113","B_REL606", "HS"]
+              ["E.coli_K12-MG1655", "E.coli_K12_W3110", "E.coli_BW25113","E.coli_B REL606", "E.coli_HS"]
         },  # similar strains (lab + commensal)
         "test": {
             "ecoli_upec_pathogens":
@@ -31,7 +31,7 @@ EXPERIMENTS_CONFIG = [
         },
         "test": {
             "ecoli_k12_lab": 
-                ["E.coli_K12_MG1655", "E.coli_K12_W3110"],  # lab K-12
+                ["E.coli_K12-MG1655", "E.coli_K12_W3110"],  # lab K-12
             "ecoli_lab_derivatives": 
                 ["E.coli_BW25113", "E.coli_B REL606"],      # lab derivatives
             "salmonella": 

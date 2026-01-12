@@ -131,3 +131,25 @@ def plot_violin_distributions(results_list, metric='F1_Score'):
     plt.ylabel(metric)
     plt.tight_layout()
     plt.show()
+
+# --- הוספה לסוף הקובץ evaluation.py ---
+
+def plot_tuning_curve(tuning_results):
+    """
+    מצייר גרף של F1 Score כתלות בערך ה-Penalty.
+    """
+    if not tuning_results: return
+    df = pd.DataFrame(tuning_results)
+    
+    plt.figure(figsize=(10, 6))
+    
+    # גרף קו: ציר X הוא עוצמת השינוי, ציר Y הוא ה-F1
+    # hue='Genome' מאפשר לראות אם השינוי משפיע אותו דבר על כל הגנומים
+    sns.lineplot(data=df, x='Penalty', y='F1_Score', hue='Genome', marker='o', palette='viridis')
+    
+    plt.title('Hyperparameter Tuning: Effect of Transition Penalty on F1', fontsize=16)
+    plt.xlabel('Transition Penalty (Reduction in P(C->C))')
+    plt.ylabel('F1 Score')
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    plt.show()
