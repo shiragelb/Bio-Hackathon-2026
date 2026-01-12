@@ -1,6 +1,6 @@
 STATES = ("C", "N")
 STATES_MORE_HIDDEN_STATES = ['N', 'S', '1', '2', '3', 'E']
-ALPHABET = ("A", "C", "G", "T","N")
+ALPHABET = ("A", "C", "G", "T", "N")
 
 MODEL_CONFIG = {
     "basic": {
@@ -17,9 +17,9 @@ MODEL_CONFIG = {
         "alphabet": ALPHABET,
         "laplace_smoothing": 1.0,
         "base_path": "processed_data_2",
-        "module_name": "hmm",               # שם הקובץ (בלי .py)
-        "train_func": "train_supervised_hmm", # שם פונקציית האימון
-        "viterbi_func": "viterbi"           # שם פונקציית החיזוי
+        "module_name": "model",               # שם הקובץ (בלי .py)
+        "train_func": "get_train_data_high_order", # שם פונקציית האימון
+        "viterbi_func": "fast_high_order_viterbi"           # שם פונקציית החיזוי
     }
 }
 

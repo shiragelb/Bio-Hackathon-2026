@@ -42,7 +42,7 @@ def run_pipeline(model):
                     train_labels += read_labels(f"{base_path}/{label_file}")
                 
                 print(f"Training on {len(train_seq)} bp...")
-                emissions, transitions, init = train_func(train_seq, train_labels,config["states"], config["alphabet"], config["laplace_smoothing"])
+                emissions, transitions, init = train_func(train_seq, train_labels, config["states"], config["alphabet"], config["laplace_smoothing"])
             except Exception as e:
                 print(f"Error during training for group {train_group_name}: {e}")
                 continue
