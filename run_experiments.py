@@ -1,9 +1,9 @@
 from pathlib import Path
 import pandas as pd
 from hmm import (
-    read_fasta, read_labels,
-    train_supervised_hmm, viterbi
+    read_fasta, read_labels
 )
+import importlib
 import evaluation as ev
 from experiments_config import EXPERIMENTS_CONFIG, MODEL_CONFIG, EXPERIMENTS_CONFIG_TEMP
 
@@ -12,6 +12,18 @@ def run_pipeline(model):
     all_results = [] 
     config = MODEL_CONFIG[model]
     base_path = config["base_path"]
+
+    try:
+        model_module = importlib.import_module(config["module_name"])
+        train_func = getattr(model_module, config["train_func"])
+        viterbi_func = getattr(model_module, config["viterbi_func"])
+        
+        print(f"Loaded '{config['train_func']}' and '{config['viterbi_func']}' from {config['module_name']}")
+        
+    except (ImportError, AttributeError) as e:
+        print(f"Critical Error: Could not load model functions for {model}. {e}")
+        return
+    
     for exp in EXPERIMENTS_CONFIG:
         results = [] 
         gene_length_data = []
@@ -30,7 +42,7 @@ def run_pipeline(model):
                     train_labels += read_labels(f"{base_path}/{label_file}")
                 
                 print(f"Training on {len(train_seq)} bp...")
-                emissions, transitions, init = train_supervised_hmm(train_seq, train_labels,config["states"], config["alphabet"], config["laplace_smoothing"])
+                emissions, transitions, init = train_func(train_seq, train_labels,config["states"], config["alphabet"], config["laplace_smoothing"])
             except Exception as e:
                 print(f"Error during training for group {train_group_name}: {e}")
                 continue
@@ -51,7 +63,7 @@ def run_pipeline(model):
                         t_seq = read_fasta(f"{base_path}/{test_genome}")
                         t_true = read_labels(f"{base_path}/{test_label_file}")
                                                 
-                        t_pred = viterbi(t_seq, emissions, transitions, init, config["states"])
+                        t_pred = viterbi_func(t_seq, emissions, transitions, init, config["states"])
 
                         length_stats = ev.collect_gene_length_stats(t_true, t_pred)
                         

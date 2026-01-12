@@ -7,13 +7,19 @@ MODEL_CONFIG = {
         "states": STATES,
         "alphabet": ALPHABET,
         "laplace_smoothing": 1.0,
-        "base_path": "processed"
+        "base_path": "processed",
+        "module_name": "hmm",               # שם הקובץ (בלי .py)
+        "train_func": "train_supervised_hmm", # שם פונקציית האימון
+        "viterbi_func": "viterbi"           # שם פונקציית החיזוי
     },
     "more_hidden_states": {
         "states": STATES_MORE_HIDDEN_STATES,
         "alphabet": ALPHABET,
         "laplace_smoothing": 1.0,
-        "base_path": "processed_data_2"
+        "base_path": "processed_data_2",
+        "module_name": "hmm",               # שם הקובץ (בלי .py)
+        "train_func": "train_supervised_hmm", # שם פונקציית האימון
+        "viterbi_func": "viterbi"           # שם פונקציית החיזוי
     }
 }
 
